@@ -8,6 +8,8 @@ A high-performance, lock-free RTP (Real-time Transport Protocol) fanout server w
 
 ## Features
 
+- **Multi-Stream Architecture**: 10 independent UDP streams (ports 1230-1239) for concurrent media feeds
+- **Per-Port Subscriber Management**: Up to 8 subscribers per stream with independent TTL-based eviction
 - **Lock-free Architecture**: Uses crossbeam lock-free data structures for maximum throughput
 - **Session-based Gating**: Fine-grained control over media streams with per-session subscriber limits
 - **High Performance**: Designed for 10,000+ concurrent sessions with 1000+ subscribers per session
@@ -15,46 +17,63 @@ A high-performance, lock-free RTP (Real-time Transport Protocol) fanout server w
 - **gRPC Control API**: Programmatic session management and subscriber control
 - **Docker Support**: Ready-to-deploy container images
 - **Rover Integration**: Compatible with Ottopia's media infrastructure
+- **Multi-Camera Vehicle Feeds**: Session-gated fanout for autonomous vehicle camera systems
 
 ## Architecture
 
+### Multi-Stream Design
+
+The server supports **10 independent UDP streams** (ports 1230-1239), each with isolated subscriber management:
+
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    RTP Fanout Server                         │
-├─────────────────────────────────────────────────────────────┤
-│  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐    │
-│  │ UDP Socket   │──▶│ Packet Queue │──▶│ Fanout Engine│    │
-│  └──────────────┘   │ (Lock-free)  │   └──────────────┘    │
-│                     └──────────────┘          │             │
-│                                               ▼             │
-│                              ┌──────────────────────────┐   │
-│                              │    Session Manager       │   │
-│                              │  ┌────────────────────┐  │   │
-│                              │  │ Session 1 (SSRC A) │  │   │
-│                              │  │  - Subscribers     │  │   │
-│                              │  │  - Packet counters │  │   │
-│                              │  └────────────────────┘  │   │
-│                              │  ┌────────────────────┐  │   │
-│                              │  │ Session 2 (SSRC B) │  │   │
-│                              │  │  - Subscribers     │  │   │
-│                              │  │  - Packet counters │  │   │
-│                              │  └────────────────────┘  │   │
-│                              └──────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-                    ┌──────────────────────┐
-                    │   gRPC Control API   │
-                    └──────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         RTP Fanout Server                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   Stream 0 (1230)    Stream 1 (1231)    Stream 2 (1232) ... Stream 9 (1239)  │
+│   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐      ┌─────────────┐ │
+│   │ UDP Socket  │    │ UDP Socket  │    │ UDP Socket  │      │ UDP Socket  │ │
+│   └──────┬──────┘    └──────┬──────┘    └──────┬──────┘      └──────┬──────┘ │
+│          │                  │                  │                    │        │
+│          ▼                  ▼                  ▼                    ▼        │
+│   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐      ┌─────────────┐ │
+│   │  Receiver   │    │  Receiver   │    │  Receiver   │      │  Receiver   │ │
+│   │  (recvmmsg) │    │  (recvmmsg) │    │  (recvmmsg) │      │  (recvmmsg) │ │
+│   └──────┬──────┘    └──────┬──────┘    └──────┬──────┘      └──────┬──────┘ │
+│          │                  │                  │                    │        │
+│          ▼                  ▼                  ▼                    ▼        │
+│   ┌─────────────────────────────────────────────────────────────────────┐    │
+│   │                    Lock-Free Fanout Engine                           │    │
+│   │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐ │    │
+│   │  │ Subscribers │  │ Subscribers │  │ Subscribers │  │ Subscribers │ │    │
+│   │  │  Stream 0   │  │  Stream 1   │  │  Stream 2   │  │  Stream 9   │ │    │
+│   │  │  (max 8)    │  │  (max 8)    │  │  (max 8)    │  │  (max 8)    │ │    │
+│   │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘ │    │
+│   └─────────────────────────────────────────────────────────────────────┘    │
+│                                      │                                       │
+│                                      ▼                                       │
+│                         ┌──────────────────────┐                             │
+│                         │   gRPC Control API   │                             │
+│                         │  (Port 50051)        │                             │
+│                         └──────────────────────┘                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Components
 
-1. **UDP Socket**: Receives RTP packets on the configured port
-2. **Packet Queue**: Lock-free SegQueue for buffering incoming packets
-3. **Fanout Engine**: Processes packets and distributes to subscribers
-4. **Session Manager**: Manages media sessions indexed by SSRC
-5. **gRPC API**: Control plane for session lifecycle management
+1. **UDP Sockets**: 10 independent RTP receive ports (1230-1239)
+2. **Per-Stream Receivers**: Dedicated `recvmmsg` batch receivers for each port
+3. **Packet Queue**: Lock-free SegQueue for buffering incoming packets
+4. **Fanout Engine**: Processes packets and distributes to subscribers per stream
+5. **Session Manager**: Manages media sessions indexed by SSRC with per-port isolation
+6. **gRPC API**: Control plane for session lifecycle management
+
+### Multi-Stream Benefits
+
+- **Isolation**: Each camera/feed has dedicated port and subscriber pool
+- **Scalability**: 10 concurrent streams × 8 subscribers = 80 total subscribers
+- **Session-Gated Fanout**: Per-port subscriber management for multi-camera vehicle feeds
+- **Independent TTL**: Each stream's subscribers expire independently
 
 ## Build Instructions
 
@@ -97,13 +116,17 @@ docker run -p 5004:5004/udp -p 9090:9090 rtp-fanout-server:latest
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RTP_FANOUT__BIND_ADDRESS` | `0.0.0.0:5004` | UDP listen address for RTP |
+| `RTP_FANOUT__BASE_PORT` | `1230` | Base UDP port for stream 0 (ports 1230-1239) |
+| `RTP_FANOUT__NUM_STREAMS` | `10` | Number of independent UDP streams (ports 1230-1239) |
+| `RTP_FANOUT__MAX_SUBSCRIBERS_PER_STREAM` | `8` | Max subscribers per individual stream |
+| `RTP_FANOUT__BIND_ADDRESS` | `0.0.0.0:5004` | UDP listen address for RTP (legacy) |
 | `RTP_FANOUT__MAX_SESSIONS` | `10000` | Maximum concurrent sessions |
 | `RTP_FANOUT__MAX_FANOUT_PER_SESSION` | `1000` | Max subscribers per session |
 | `RTP_FANOUT__BUFFER_SIZE` | `65536` | Internal packet buffer size |
 | `RTP_FANOUT__SESSION_TIMEOUT_SECS` | `300` | Session idle timeout |
 | `RTP_FANOUT__ENABLE_METRICS` | `true` | Enable Prometheus metrics |
 | `RTP_FANOUT__METRICS_BIND_ADDRESS` | `0.0.0.0:9090` | Metrics HTTP endpoint |
+| `RTP_FANOUT__GRPC_PORT` | `50051` | gRPC control API port |
 
 ### Configuration File
 
