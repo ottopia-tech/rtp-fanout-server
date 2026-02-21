@@ -1,0 +1,8 @@
+# Server Configuration
+bind_address = "0.0.0.0:5004"
+max_sessions = 10000
+max_fanout_per_session = 1000
+buffer_size = 65536
+session_timeout_secs = 300
+enable_metrics = true
+metrics_bind_address = "0.0.0.0:9090"

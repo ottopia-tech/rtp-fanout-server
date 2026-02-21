@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package rtpfanout;
+
+option go_package = "github.com/ottopia-tech/rtp-fanout-server/proto";
+
+import "google/protobuf/empty.proto";
+
+service SessionService {
+  rpc CreateSession(CreateSessionRequest) returns (SessionResponse);
+  rpc GetSession(GetSessionRequest) returns (SessionResponse);
+  rpc DeleteSession(DeleteSessionRequest) returns (google.protobuf.Empty);
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+  rpc AddSubscriber(AddSubscriberRequest) returns (google.protobuf.Empty);
+  rpc RemoveSubscriber(RemoveSubscriberRequest) returns (google.protobuf.Empty);
+  rpc GetSessionStats(GetSessionStatsRequest) returns (SessionStatsResponse);
+}
+
+message CreateSessionRequest {
+  string source_address = 1;
+  uint32 ssrc = 2;
+  string media_type = 3;  // audio, video, data
+}
+
+message GetSessionRequest {
+  string session_id = 1;
+}
+
+message DeleteSessionRequest {
+  string session_id = 1;
+}
+
+message ListSessionsRequest {
+  int32 limit = 1;
+  string cursor = 2;
+}
+
+message AddSubscriberRequest {
+  string session_id = 1;
+  string subscriber_address = 2;
+}
+
+message RemoveSubscriberRequest {
+  string session_id = 1;
+  string subscriber_address = 2;
+}
+
+message GetSessionStatsRequest {
+  string session_id = 1;
+}
+
+message SessionResponse {
+  string session_id = 1;
+  string source_address = 2;
+  uint32 ssrc = 3;
+  int64 subscriber_count = 4;
+  string created_at = 5;
+  string status = 6;
+}
+
+message ListSessionsResponse {
+  repeated SessionResponse sessions = 1;
+  string next_cursor = 2;
+}
+
+message SessionStatsResponse {
+  string session_id = 1;
+  uint64 packets_received = 2;
+  uint64 packets_sent = 3;
+  uint64 bytes_received = 4;
+  uint64 bytes_sent = 5;
+  int32 subscriber_count = 6;
+  double uptime_seconds = 7;
+  double packets_per_second = 8;
+}
