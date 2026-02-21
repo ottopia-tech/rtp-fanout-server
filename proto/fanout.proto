@@ -6,6 +6,17 @@ option go_package = "github.com/ottopia-tech/rtp-fanout-server/proto";
 
 import "google/protobuf/empty.proto";
 
+// SessionService provides gRPC control API for managing RTP fanout sessions
+// across 10 independent UDP streams (ports 1230-1239).
+//
+// Example: Creating a session on stream port 1230:
+//   grpcurl -plaintext -d '{
+//     "source_address": "192.168.1.100:5004",
+//     "stream_port": 1230,
+//     "ssrc": 1234567890,
+//     "media_type": "video"
+//   }' localhost:50051 rtpfanout.SessionService/CreateSession
+//
 service SessionService {
   rpc CreateSession(CreateSessionRequest) returns (SessionResponse);
   rpc GetSession(GetSessionRequest) returns (SessionResponse);
@@ -16,10 +27,17 @@ service SessionService {
   rpc GetSessionStats(GetSessionStatsRequest) returns (SessionStatsResponse);
 }
 
+// CreateSessionRequest creates a new fanout session on a specific stream port.
+// Stream ports are numbered 1230-1239 for 10 independent UDP streams.
 message CreateSessionRequest {
+  // Source address sending the RTP stream (e.g., "192.168.1.100:5004")
   string source_address = 1;
-  uint32 ssrc = 2;
-  string media_type = 3;  // audio, video, data
+  // UDP port for this stream (1230-1239). Each port supports up to 8 subscribers.
+  int32 stream_port = 2;
+  // RTP SSRC identifier for the media stream
+  uint32 ssrc = 3;
+  // Media type: audio, video, or data
+  string media_type = 4;
 }
 
 message GetSessionRequest {
@@ -49,13 +67,22 @@ message GetSessionStatsRequest {
   string session_id = 1;
 }
 
+// SessionResponse contains session details including the assigned stream port.
 message SessionResponse {
+  // Unique session identifier (UUID)
   string session_id = 1;
+  // Source address of the RTP stream
   string source_address = 2;
-  uint32 ssrc = 3;
-  int64 subscriber_count = 4;
-  string created_at = 5;
-  string status = 6;
+  // UDP port for this stream (1230-1239)
+  int32 stream_port = 3;
+  // RTP SSRC identifier
+  uint32 ssrc = 4;
+  // Current number of active subscribers
+  int64 subscriber_count = 5;
+  // Session creation timestamp (RFC3339)
+  string created_at = 6;
+  // Session status: active, paused, or closed
+  string status = 7;
 }
 
 message ListSessionsResponse {
@@ -63,13 +90,24 @@ message ListSessionsResponse {
   string next_cursor = 2;
 }
 
+// SessionStatsResponse provides detailed statistics for a session.
 message SessionStatsResponse {
+  // Unique session identifier
   string session_id = 1;
-  uint64 packets_received = 2;
-  uint64 packets_sent = 3;
-  uint64 bytes_received = 4;
-  uint64 bytes_sent = 5;
-  int32 subscriber_count = 6;
-  double uptime_seconds = 7;
-  double packets_per_second = 8;
+  // UDP port for this stream (1230-1239)
+  int32 stream_port = 2;
+  // Total RTP packets received
+  uint64 packets_received = 3;
+  // Total RTP packets sent to all subscribers
+  uint64 packets_sent = 4;
+  // Total bytes received
+  uint64 bytes_received = 5;
+  // Total bytes sent to subscribers
+  uint64 bytes_sent = 6;
+  // Current number of active subscribers (max 8 per stream)
+  int32 subscriber_count = 7;
+  // Session uptime in seconds
+  double uptime_seconds = 8;
+  // Current packet rate (packets per second)
+  double packets_per_second = 9;
 }
