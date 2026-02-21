@@ -261,3 +261,7 @@ MIT License - See [LICENSE](LICENSE) for details.
 ## Support
 
 For issues and feature requests, please use [GitHub Issues](https://github.com/ottopia-tech/rtp-fanout-server/issues).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
